@@ -11,53 +11,75 @@ const MainContentLayout = () => {
 
   const panelStyle = {
     padding: '10px',
-    border: '1px solid #e0e0e0',
+    // border: '1px solid var(--color-highlight)', // Removida a borda dos painéis internos
+    backgroundColor: 'var(--color-background-primary)', // Usando variável de tema
+    color: 'var(--color-text-primary)', // Usando variável de tema
     display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: 'column', // Para que o conteúdo interno possa se expandir
+    // alignItems: 'center', // Removido para permitir que o conteúdo interno defina seu alinhamento
+    // justifyContent: 'center', // Removido para permitir que o conteúdo interno defina seu alinhamento
     overflow: 'auto', // Para caso o conteúdo exceda o painel
+    transition: 'background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease', // Transição suave
   };
 
   const resizeHandleStyle = {
-    width: '8px', // Largura do divisor horizontal
-    height: '8px', // Altura do divisor vertical
-    backgroundColor: '#c0c0c0',
+    backgroundColor: 'var(--color-grid-handle)', // Usando nova variável de tema para cor cinza
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
+    transition: 'background-color 0.3s ease', // Transição suave
+    position: 'relative', // Para posicionar o grabber
+  };
+
+  const grabberStyle = {
+    width: '10px',
+    height: '10px',
+    borderRadius: '3px',
+    backgroundColor: 'var(--color-grid-grabber)', // Usando nova variável de tema para o pegador
+  };
+
+  const mainGrabberStyle = { // Estilo para o pegador maior na interseção principal
+    width: '14px', // Maior
+    height: '14px', // Maior
+    borderRadius: '4px', // Um pouco mais arredondado
+    backgroundColor: 'var(--color-grid-grabber)',
   };
   
   // Estilo específico para o divisor vertical entre as colunas principais
   const verticalResizeHandleStyle = {
     ...resizeHandleStyle,
-    width: '8px', // Largura do divisor
-    margin: '0 2px', // Pequena margem para não colar nos painéis
+    width: '4px', // Largura do divisor reduzida
+    margin: '0 1px', // Margem ajustada
   };
 
   // Estilo específico para o divisor horizontal entre Chat e Console
   const horizontalResizeHandleStyle = {
     ...resizeHandleStyle,
-    height: '8px', // Altura do divisor
-    margin: '2px 0', // Pequena margem
+    height: '4px', // Altura do divisor reduzida
+    margin: '1px 0', // Margem ajustada
   };
 
 
   return (
     <div style={{ flexGrow: 1, height: '100%', display: 'flex' }}>
       <PanelGroup direction="horizontal" style={{ width: '100%', height: '100%' }}>
-        <Panel defaultSize={50} minSize={20}>
+        <Panel defaultSize={50} minSize={1}> {/* minSize ainda mais reduzido */}
           <PanelGroup direction="vertical">
-            <Panel defaultSize={70} minSize={20} style={panelStyle}>
+            <Panel defaultSize={70} minSize={1} style={panelStyle}> {/* minSize ainda mais reduzido */}
               <ChatPanel />
             </Panel>
-            <PanelResizeHandle style={horizontalResizeHandleStyle} />
-            <Panel defaultSize={30} minSize={10} style={panelStyle}>
+            <PanelResizeHandle style={horizontalResizeHandleStyle}>
+              <div style={grabberStyle} />
+            </PanelResizeHandle>
+            <Panel defaultSize={30} minSize={1} style={panelStyle}> {/* minSize ainda mais reduzido */}
               <ConsolePanel />
             </Panel>
           </PanelGroup>
         </Panel>
-        <PanelResizeHandle style={verticalResizeHandleStyle} />
-        <Panel defaultSize={50} minSize={20} style={panelStyle}>
+        <PanelResizeHandle style={verticalResizeHandleStyle}>
+          <div style={mainGrabberStyle} /> {/* Usando o pegador maior */}
+        </PanelResizeHandle>
+        <Panel defaultSize={50} minSize={1} style={panelStyle}> {/* minSize ainda mais reduzido */}
           <DisplayPanel />
         </Panel>
       </PanelGroup>

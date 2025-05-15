@@ -1,9 +1,80 @@
-/* Estilos globais podem ser definidos aqui */
-body {
-  margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+:root {
+  --font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  --line-height: 1.5;
+  --font-weight: 400;
+
+  /* Cores base - podem ser sobrescritas pelos temas */
+  --color-text-primary: #111111;
+  --color-background-primary: #FFFFFF;
+  --color-highlight: #000000;
+  --color-grid-handle: #D3D3D3; /* Cinza claro para os eixos */
+  --color-grid-grabber: #A9A9A9; /* Cinza um pouco mais escuro para o pegador */
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Tema Claro (Padrão) */
+html[data-theme='light'] {
+  --color-text-primary: #111111; /* Preto */
+  --color-background-primary: #FFFFFF; /* Branco */
+  --color-highlight: #000000; /* Preto */
+}
+
+/* Tema Escuro */
+html[data-theme='dark'] {
+  --color-text-primary: #E0E0E0; /* Quase branco */
+  --color-background-primary: #121212; /* Preto */
+  --color-highlight: #0A74DA; /* Azul neon escuro */
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-family);
+  line-height: var(--line-height);
+  font-weight: var(--font-weight);
+  color: var(--color-text-primary);
+  background-color: var(--color-background-primary);
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+a {
+  font-weight: 500;
+  color: var(--color-highlight);
+  text-decoration: inherit;
+}
+a:hover {
+  opacity: 0.8;
+}
+
+button {
+  border-radius: 8px;
+  border: 1px solid transparent;
+  padding: 0.6em 1.2em;
+  font-size: 1em;
+  font-weight: 500;
+  font-family: inherit;
+  background-color: var(--color-highlight);
+  color: var(--color-background-primary); /* Para contraste com o highlight */
+  cursor: pointer;
+  transition: border-color 0.25s, background-color 0.25s, color 0.25s;
+}
+button:hover {
+  border-color: var(--color-highlight);
+  background-color: var(--color-background-primary);
+  color: var(--color-highlight);
+}
+button:focus,
+button:focus-visible {
+  outline: 4px auto -webkit-focus-ring-color;
+}
+
+/* Estilos para garantir que o App ocupe toda a tela */
+#root {
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden; /* Para evitar barras de rolagem indesejadas no nível raiz */
 }
