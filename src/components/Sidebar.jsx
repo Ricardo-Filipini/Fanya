@@ -1,28 +1,95 @@
-import React from 'react'; // Removido useState daqui, pois não é usado diretamente no corpo do componente Sidebar
-import PropTypes from 'prop-types'; // Adicionado PropTypes
-import { FiUser, FiMessageSquare, FiLogOut, FiChevronsLeft, FiChevronsRight, FiSun, FiMoon, FiLayout, FiTerminal } from 'react-icons/fi';
+import React from 'react';
+import PropTypes from 'prop-types';
+import { 
+  FiUser, FiMessageSquare, FiLogOut, FiChevronsLeft, FiChevronsRight, 
+  FiSun, FiMoon, FiLayout, FiTerminal, FiList, FiAlertCircle, FiPlusSquare
+} from 'react-icons/fi';
 import { useTheme } from '../contexts/ThemeContext';
-import { useAuth } from '../contexts/AuthContext'; // Importar useAuth
+import { useAuth } from '../contexts/AuthContext';
+import { useSession } from '../contexts/SessionContext';
+import { supabase } from '../services/supabaseClient'; // Import supabase client
 import '../App.css'; // Para estilos globais, se houver
 
 const Sidebar = ({ isCollapsed: propIsCollapsed, toggleSidebar: propToggleSidebar }) => {
-  // Se App.jsx gerencia o estado de colapso, usamos as props.
-  // Caso contrário, podemos ter um estado local como fallback ou para componentes independentes.
-  // Para este exemplo, vamos assumir que App.jsx controla o estado.
-  // Se propIsCollapsed e propToggleSidebar não forem passados, precisaria de estado local.
-  const isExpanded = !propIsCollapsed; 
+  const isExpanded = !propIsCollapsed;
   const toggleSidebar = propToggleSidebar;
 
   const { theme, toggleTheme } = useTheme();
-  const { user, signOut } = useAuth(); // Obter usuário e função signOut
+  const { user, signOut } = useAuth();
+  const { 
+    sessionsList, 
+    activeSessionId, 
+    setActiveSessionId, 
+    loadingSessions, 
+    errorSessions,
+    fetchSessions, // Get fetchSessions from context
+  } = useSession();
+  
   const displayName = user ? (user.user_metadata?.full_name || user.user_metadata?.name || user.email) : '';
 
   const handleLogout = async () => {
     await signOut();
-    // O onAuthStateChange no AuthContext cuidará de redirecionar/atualizar a UI
   };
 
-  // Ícones para os itens da sidebar (apenas exemplos)
+  const handleCreateNewSession = async () => {
+    if (!user || !user.id) {
+      console.error("Usuário não autenticado para criar sessão.");
+      alert("Você precisa estar logado para criar uma nova sessão.");
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const newSessionData = {
+      user_id: user.id,
+      name: null, 
+      created_at: now,
+      last_activity_at: now,
+    };
+
+    try {
+      const { data, error } = await supabase
+        .from('sessions')
+        .insert(newSessionData)
+        .select(); 
+
+      if (error) {
+        console.error('Erro ao criar nova sessão no Supabase:', error);
+        throw error;
+      }
+
+      if (data && data.length > 0) {
+        const newSession = data[0];
+        setActiveSessionId(newSession.id); 
+        if (fetchSessions) { 
+            await fetchSessions(user.id); 
+        }
+      } else {
+        console.error('Nenhum dado retornado após a inserção da sessão.');
+      }
+    } catch (err) {
+      console.error('Falha ao criar nova sessão:', err.message);
+      alert(`Erro ao criar sessão: ${err.message}`);
+    }
+  };
+
+  const formatSessionDisplayName = (session) => {
+    if (session.name && session.name.trim() !== '') return session.name;
+    if (session.created_at) {
+      try {
+        return `Sessão de ${new Date(session.created_at).toLocaleDateString('pt-BR', {
+          day: '2-digit',
+          month: 'short',
+          hour: '2-digit',
+          minute: '2-digit',
+        })}`;
+      } catch (e) {
+        console.error("Erro ao formatar data da sessão:", e);
+        return 'Sessão (data inválida)';
+      }
+    }
+    return 'Sessão sem nome';
+  };
+
   const menuItems = [
     { id: 'chat', name: 'Chat', icon: <FiMessageSquare size={24} /> },
     { id: 'display', name: 'Display', icon: <FiLayout size={24} /> },
@@ -30,17 +97,15 @@ const Sidebar = ({ isCollapsed: propIsCollapsed, toggleSidebar: propToggleSideba
   ];
 
   const sidebarStyle = {
-    width: isExpanded ? '250px' : '60px',
+    width: isExpanded ? '260px' : '60px',
     backgroundColor: 'var(--color-background-primary)',
     color: 'var(--color-text-primary)',
-    padding: '10px',
     transition: 'width 0.3s ease, background-color 0.3s ease, color 0.3s ease',
     display: 'flex',
     flexDirection: 'column',
-    alignItems: isExpanded ? 'flex-start' : 'center',
-    borderRight: '1px solid var(--color-highlight)',
     height: '100vh',
-    boxSizing: 'border-box'
+    boxSizing: 'border-box',
+    borderRight: '1px solid var(--color-border)',
   };
 
   const buttonStyle = {
@@ -49,115 +114,207 @@ const Sidebar = ({ isCollapsed: propIsCollapsed, toggleSidebar: propToggleSideba
     color: 'var(--color-text-primary)',
     fontSize: '1.5rem',
     cursor: 'pointer',
-    padding: '5px',
+    padding: '8px',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    width: '100%', // Para que o botão ocupe a largura
-    boxSizing: 'border-box'
+    width: 'auto',
+    boxSizing: 'border-box',
   };
 
-  const menuItemStyle = {
-    marginBottom: '15px',
+  const baseItemStyle = {
     display: 'flex',
     alignItems: 'center',
-    cursor: 'pointer',
-    padding: '8px',
-    borderRadius: '4px',
     width: '100%',
+    padding: '10px',
+    borderRadius: '6px',
+    marginBottom: '5px',
+    cursor: 'pointer',
     boxSizing: 'border-box',
-    color: 'var(--color-text-primary)', // Garante que o texto do item use a cor correta
+    color: 'var(--color-text-primary)',
+    transition: 'background-color 0.2s ease, color 0.2s ease',
+  };
+  
+  const navMenuItemStyle = {
+    ...baseItemStyle,
+    justifyContent: isExpanded ? 'flex-start' : 'center',
+  };
+
+  const sessionListItemStyle = (isActive) => ({
+    ...baseItemStyle,
+    justifyContent: isExpanded ? 'flex-start' : 'center',
+    backgroundColor: isActive ? 'var(--color-accent-soft, rgba(var(--color-accent-rgb), 0.15))' : 'transparent',
+    borderLeft: isActive ? `3px solid var(--color-accent)` : 'none',
+    paddingLeft: isActive ? '7px' : '10px',
+  });
+
+  const sessionsSectionStyle = {
+    padding: isExpanded ? '0 10px' : '0 5px',
+    marginTop: '15px',
+    borderTop: isExpanded ? `1px solid var(--color-border)` : 'none',
+    paddingTop: isExpanded ? '15px' : '0',
+  };
+  
+  const sessionsTitleStyle = {
+    fontSize: '0.8rem',
+    fontWeight: '600',
+    color: 'var(--color-text-secondary)',
+    padding: '0 0 10px 0',
+    textTransform: 'uppercase',
+    letterSpacing: '0.05em',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   };
 
   const iconStyle = {
-    marginRight: isExpanded ? '10px' : '0',
-    flexShrink: 0
+    marginRight: isExpanded ? '12px' : '0',
+    flexShrink: 0,
+  };
+
+  const textStyle = {
+    overflow: 'hidden', 
+    textOverflow: 'ellipsis', 
+    whiteSpace: 'nowrap',
+    fontSize: '0.9rem',
   };
 
   return (
     <div style={sidebarStyle} className={`sidebar ${!isExpanded ? 'collapsed' : 'expanded'} ${theme}`}>
-      <button onClick={toggleSidebar} style={{ ...buttonStyle, alignSelf: isExpanded ? 'flex-end' : 'center', marginBottom: '20px' }}>
-        {isExpanded ? <FiChevronsLeft /> : <FiChevronsRight />}
-      </button>
+      <div style={{ padding: '10px', display: 'flex', justifyContent: isExpanded ? 'flex-end' : 'center', alignItems: 'center', borderBottom: `1px solid var(--color-border)`, marginBottom: '10px' }}>
+        <button onClick={toggleSidebar} style={{...buttonStyle, padding: '5px'}} title={isExpanded ? "Recolher sidebar" : "Expandir sidebar"}>
+          {isExpanded ? <FiChevronsLeft size={22}/> : <FiChevronsRight size={22}/>}
+        </button>
+      </div>
 
-      {/* Itens de Navegação */}
-      <nav style={{ width: '100%', flexGrow: 1 /* Para empurrar o rodapé para baixo */ }}>
-        <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-          {menuItems.map(item => (
-            <li key={item.id} title={!isExpanded ? item.name : ''} style={menuItemStyle}>
-              <a href={`#${item.id}`} style={{ display: 'flex', alignItems: 'center', textDecoration: 'none', color: 'inherit', width: '100%' }}>
-                <span style={iconStyle}>{item.icon}</span>
-                {isExpanded && <span>{item.name}</span>}
-              </a>
-            </li>
-          ))}
-        </ul>
-      </nav>
+      <div style={{ width: '100%', flexGrow: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', padding: '0 10px' }}>
+        <nav style={{ width: '100%' }}>
+          <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+            {menuItems.map(item => (
+              <li key={item.id} title={!isExpanded ? item.name : ''} style={navMenuItemStyle}>
+                <a href={`#${item.id}`} style={{ display: 'flex', alignItems: 'center', textDecoration: 'none', color: 'inherit', width: '100%' }}>
+                  <span style={iconStyle}>{item.icon}</span>
+                  {isExpanded && <span style={textStyle}>{item.name}</span>}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </nav>
 
-      {/* Rodapé da Sidebar: Informações do Usuário e Controles */}
+        {user && (
+          <div style={sessionsSectionStyle}>
+            {isExpanded ? (
+              <React.Fragment>
+                <h3 style={sessionsTitleStyle}>
+                  Sessões
+                  <button 
+                    title="Nova Sessão" 
+                    style={{...buttonStyle, padding: '4px', color: 'var(--color-accent)'}} 
+                    onClick={handleCreateNewSession}
+                  >
+                    <FiPlusSquare size={18} />
+                  </button>
+                </h3>
+                {loadingSessions && <p style={{ padding: '8px 0', color: 'var(--color-text-secondary)', fontSize: '0.85rem' }}>Carregando sessões...</p>}
+                {errorSessions && (
+                  <div style={{ padding: '8px 0', color: 'var(--color-danger)', display: 'flex', alignItems: 'center', fontSize: '0.85rem' }}>
+                    <FiAlertCircle style={{ marginRight: '8px', flexShrink: 0 }} size={18}/> {errorSessions}
+                  </div>
+                )}
+                {!loadingSessions && !errorSessions && sessionsList.length === 0 && (
+                  <p style={{ padding: '8px 0', color: 'var(--color-text-secondary)', fontSize: '0.85rem' }}>Nenhuma sessão encontrada.</p>
+                )}
+                {!loadingSessions && !errorSessions && sessionsList.length > 0 && (
+                  <ul style={{ listStyle: 'none', padding: 0, margin: 0, maxHeight: '200px', overflowY: 'auto' }}>
+                    {sessionsList.map(session => (
+                      <li
+                        key={session.id}
+                        style={sessionListItemStyle(session.id === activeSessionId)}
+                        onClick={() => setActiveSessionId(session.id)}
+                        title={formatSessionDisplayName(session)}
+                      >
+                        <FiList size={18} style={{ ...iconStyle, color: session.id === activeSessionId ? 'var(--color-accent)' : 'var(--color-text-secondary)' }} />
+                        <span style={textStyle}>
+                          {formatSessionDisplayName(session)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </React.Fragment>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%'}}>
+                <div 
+                  style={{ ...navMenuItemStyle, justifyContent: 'center', marginTop: '20px', marginBottom: '10px' }} 
+                  title={`Sessões (${sessionsList.length})`}
+                >
+                  <FiList size={24} style={{ ...iconStyle, marginRight: 0 }} />
+                </div>
+                <button
+                  onClick={handleCreateNewSession}
+                  style={{ ...buttonStyle, width: '100%', padding: '8px 0' }}
+                  title="Nova Sessão"
+                >
+                  <FiPlusSquare size={22} />
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
       <div style={{ 
         marginTop: 'auto', 
         width: '100%', 
         display: 'flex', 
-        flexDirection: 'column', // Empilha UserInfo e ControlsContainer
+        flexDirection: 'column',
         alignItems: 'center', 
-        paddingBottom: '10px'
+        padding: '10px',
+        borderTop: `1px solid var(--color-border)`,
       }}>
-        {/* Informações do Usuário (Movido para cá) */}
         {user && (
           <div 
             style={{ 
-              ...menuItemStyle, // Reutiliza estilo base para padding, etc.
-              display: 'flex', 
-              alignItems: 'center', 
+              ...baseItemStyle,
               justifyContent: isExpanded ? 'flex-start' : 'center', 
-              width: '100%', 
-              marginBottom: '10px', // Espaço antes dos botões de controle
-              paddingLeft: isExpanded ? '8px' : '0', // Ajusta padding para centralizar ícone quando colapsado
-              paddingRight: isExpanded ? '8px' : '0',
+              marginBottom: '10px',
+              cursor: 'default',
             }} 
-            title={user.email} // Tooltip com o email completo
+            title={user.email}
           >
-            <FiUser size={24} style={{ marginRight: isExpanded ? '10px' : '0', flexShrink: 0 }} />
-            {isExpanded && <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displayName}</span>}
+            <FiUser size={22} style={iconStyle} />
+            {isExpanded && <span style={textStyle}>{displayName}</span>}
           </div>
         )}
 
-        {/* Container dos Botões de Controle (Tema e Logout) */}
         <div style={{
           width: '100%',
           display: 'flex',
-          flexDirection: isExpanded ? 'row' : 'column', // Linha se expandido, coluna se colapsado
-          justifyContent: isExpanded ? 'space-evenly' : 'center',
+          flexDirection: isExpanded ? 'row' : 'column',
+          justifyContent: isExpanded ? 'space-between' : 'center',
           alignItems: 'center',
         }}>
-          {/* Botão de Tema */}
           <button
             onClick={toggleTheme}
             style={{ 
               ...buttonStyle, 
-              width: 'auto', 
-              padding: '8px', 
-              ...(isExpanded ? {} : { marginBottom: '8px' }) // Margem abaixo quando colapsado e em coluna
+              ...(isExpanded ? {} : { marginBottom: '8px' })
             }}
             title={theme === 'light' ? "Mudar para Tema Escuro" : "Mudar para Tema Claro"}
           >
-            {theme === 'light' ? <FiMoon size={24} /> : <FiSun size={24} />}
+            {theme === 'light' ? <FiMoon size={20} /> : <FiSun size={20} />}
           </button>
 
-          {/* Botão de Logout */}
           {user && (
             <button
               onClick={handleLogout}
               style={{ 
-                ...buttonStyle, 
-                width: 'auto', 
-                padding: '8px', 
-                ...(isExpanded ? { marginLeft: '10px' } : { marginLeft: '0' }) // Margem à esquerda só se expandido e em linha
+                ...buttonStyle,
+                ...(isExpanded ? { marginLeft: '10px' } : {}) 
               }}
               title="Logout"
             >
-              <FiLogOut size={24} />
+              <FiLogOut size={20} />
             </button>
           )}
         </div>
@@ -166,7 +323,6 @@ const Sidebar = ({ isCollapsed: propIsCollapsed, toggleSidebar: propToggleSideba
   );
 };
 
-// Adicionando PropTypes para as props que vêm de App.jsx
 Sidebar.propTypes = {
   isCollapsed: PropTypes.bool.isRequired,
   toggleSidebar: PropTypes.func.isRequired,
