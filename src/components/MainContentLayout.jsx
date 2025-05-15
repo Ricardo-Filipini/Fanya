@@ -44,6 +44,18 @@ const MainContentLayout = () => {
     borderRadius: '4px', // Um pouco mais arredondado
     backgroundColor: 'var(--color-grid-grabber)',
   };
+
+  const intersectionNubStyle = { // Estilo para o novo "nub" na interseção T
+    width: '12px',
+    height: '12px',
+    borderRadius: '3px',
+    backgroundColor: 'var(--color-grid-grabber)',
+    position: 'absolute',
+    right: '-4px', // Posiciona para centralizar na linha vertical do divisor (12px nub - 4px handle / 2 = 4px offset)
+    top: '50%',
+    transform: 'translateY(-50%)',
+    zIndex: 1, // Para garantir que fique sobre o handle
+  };
   
   // Estilo específico para o divisor vertical entre as colunas principais
   const verticalResizeHandleStyle = {
@@ -69,7 +81,8 @@ const MainContentLayout = () => {
               <ChatPanel />
             </Panel>
             <PanelResizeHandle style={horizontalResizeHandleStyle}>
-              <div style={grabberStyle} />
+              <div style={grabberStyle} /> {/* Pegador central no handle horizontal */}
+              <div style={intersectionNubStyle} /> {/* Novo pegador na junção T */}
             </PanelResizeHandle>
             <Panel defaultSize={30} minSize={1} style={panelStyle}> {/* minSize ainda mais reduzido */}
               <ConsolePanel />
