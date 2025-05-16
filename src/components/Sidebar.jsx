@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react'; // Added useEffect
 import PropTypes from 'prop-types';
 import { 
   FiUser, FiMessageSquare, FiLogOut, FiChevronsLeft, FiChevronsRight, 
-  FiSun, FiMoon, FiLayout, FiTerminal, FiList, FiAlertCircle, FiPlusSquare
+  FiSun, FiMoon, FiLayout, FiTerminal, FiList, FiAlertCircle, FiPlusSquare,
+  FiEdit2, FiArchive, FiTrash2, FiUploadCloud // Added Trash and Restore Icons
 } from 'react-icons/fi';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -22,10 +23,20 @@ const Sidebar = ({ isCollapsed: propIsCollapsed, toggleSidebar: propToggleSideba
     setActiveSessionId, 
     loadingSessions, 
     errorSessions,
-    fetchSessions, // Get fetchSessions from context
+    fetchSessions,
+    updateSessionName,
+    archiveSession,
+    unarchiveSession, // Get unarchiveSession from context
   } = useSession();
+
+  const [editingSessionId, setEditingSessionId] = useState(null);
+  const [editingSessionName, setEditingSessionName] = useState('');
+  const [showArchivedPanel, setShowArchivedPanel] = useState(false);
+  const [archivedSessions, setArchivedSessions] = useState([]);
+  const [loadingArchived, setLoadingArchived] = useState(false);
   
-  const displayName = user ? (user.user_metadata?.full_name || user.user_metadata?.name || user.email) : '';
+  const fullDisplayName = user ? (user.user_metadata?.full_name || user.user_metadata?.name || user.email) : '';
+  const displayName = fullDisplayName.split(' ')[0]; // Get first name
 
   const handleLogout = async () => {
     await signOut();
@@ -41,7 +52,7 @@ const Sidebar = ({ isCollapsed: propIsCollapsed, toggleSidebar: propToggleSideba
     const now = new Date().toISOString();
     const newSessionData = {
       user_id: user.id,
-      name: null, 
+      name: "Nova Conversa", // UPDATED NAME
       created_at: now,
       last_activity_at: now,
     };
@@ -59,10 +70,15 @@ const Sidebar = ({ isCollapsed: propIsCollapsed, toggleSidebar: propToggleSideba
 
       if (data && data.length > 0) {
         const newSession = data[0];
-        setActiveSessionId(newSession.id); 
-        if (fetchSessions) { 
-            await fetchSessions(user.id); 
+        setActiveSessionId(newSession.id);
+        // Fetch sessions to update the list, then start editing the new one
+        if (fetchSessions) {
+            await fetchSessions(user.id); // Wait for list to update
         }
+        // After list is updated (or assuming it will update quickly via realtime/refetch),
+        // find the new session in the list to get its potentially default name for editing.
+        // However, since we set it to "Nova Conversa", we can use that.
+        handleStartEditSession(newSession); // Start editing the newly created session
       } else {
         console.error('Nenhum dado retornado após a inserção da sessão.');
       }
@@ -89,6 +105,50 @@ const Sidebar = ({ isCollapsed: propIsCollapsed, toggleSidebar: propToggleSideba
     }
     return 'Sessão sem nome';
   };
+
+  const handleStartEditSession = (session) => {
+    setEditingSessionId(session.id);
+    setEditingSessionName(session.name || ''); // Use current name or empty string
+  };
+
+  const handleCancelEditSession = () => {
+    setEditingSessionId(null);
+    setEditingSessionName('');
+  };
+
+  const handleSaveSessionName = async () => {
+    if (!editingSessionId || editingSessionName.trim() === '') {
+      // Optionally, if name is empty, revert or keep old name, or delete session?
+      // For now, just cancel if empty.
+      handleCancelEditSession();
+      return;
+    }
+    try {
+      await updateSessionName(editingSessionId, editingSessionName.trim());
+      console.log(`Sessão ${editingSessionId} renomeada para: ${editingSessionName.trim()}`);
+    } catch (error) {
+      console.error('Erro ao salvar nome da sessão na sidebar:', error);
+      alert(`Falha ao renomear sessão: ${error.message}`);
+      // Optionally, revert input to original name if save fails
+    } finally {
+      handleCancelEditSession(); // Exit editing mode
+    }
+  };
+
+  const handleEditingInputChange = (e) => {
+    setEditingSessionName(e.target.value);
+  };
+
+  const handleEditingInputKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleSaveSessionName();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      handleCancelEditSession();
+    }
+  };
+
 
   const menuItems = [
     { id: 'chat', name: 'Chat', icon: <FiMessageSquare size={24} /> },
@@ -142,11 +202,40 @@ const Sidebar = ({ isCollapsed: propIsCollapsed, toggleSidebar: propToggleSideba
 
   const sessionListItemStyle = (isActive) => ({
     ...baseItemStyle,
-    justifyContent: isExpanded ? 'flex-start' : 'center',
+    // justifyContent: isExpanded ? 'flex-start' : 'center', // Will be handled by inner flex
     backgroundColor: isActive ? 'var(--color-accent-soft, rgba(var(--color-accent-rgb), 0.15))' : 'transparent',
     borderLeft: isActive ? `3px solid var(--color-accent)` : 'none',
-    paddingLeft: isActive ? '7px' : '10px',
+    paddingLeft: isActive ? '7px' : '10px', // Adjusted for border
+    position: 'relative', // For positioning edit icon or input
   });
+
+  const sessionContentStyle = {
+    display: 'flex',
+    alignItems: 'center',
+    flexGrow: 1,
+    cursor: 'pointer', // Make the text part clickable to select session
+  };
+  
+  const editIconStyle = {
+    // marginLeft: 'auto', // Pushes icon to the right
+    padding: '4px',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    color: 'var(--color-icon-action)',
+    flexShrink: 0,
+  };
+
+  const sessionInputStyle = {
+    flexGrow: 1,
+    padding: '6px 8px',
+    border: `1px solid var(--color-border-input)`,
+    borderRadius: '4px',
+    backgroundColor: 'var(--color-background-input)',
+    color: 'var(--color-text-input)',
+    fontSize: '0.85rem',
+    marginRight: '5px', // Space before potential save/cancel buttons if added
+  };
+
 
   const sessionsSectionStyle = {
     padding: isExpanded ? '0 10px' : '0 5px',
@@ -179,17 +268,87 @@ const Sidebar = ({ isCollapsed: propIsCollapsed, toggleSidebar: propToggleSideba
     fontSize: '0.9rem',
   };
 
-  return (
-    <div style={sidebarStyle} className={`sidebar ${!isExpanded ? 'collapsed' : 'expanded'} ${theme}`}>
-      <div style={{ padding: '10px', display: 'flex', justifyContent: isExpanded ? 'flex-end' : 'center', alignItems: 'center', borderBottom: `1px solid var(--color-border)`, marginBottom: '10px' }}>
-        <button onClick={toggleSidebar} style={{...buttonStyle, padding: '5px'}} title={isExpanded ? "Recolher sidebar" : "Expandir sidebar"}>
-          {isExpanded ? <FiChevronsLeft size={22}/> : <FiChevronsRight size={22}/>}
-        </button>
-      </div>
+  const archivedPanelStyle = {
+    position: 'absolute',
+    top: '50%',
+    left: isExpanded ? '270px' : '70px', // Position next to sidebar
+    transform: 'translateY(-50%)',
+    width: '300px',
+    maxHeight: '80vh',
+    backgroundColor: 'var(--color-background-secondary)',
+    border: '1px solid var(--color-border)',
+    borderRadius: '8px',
+    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+    zIndex: 1000,
+    padding: '15px',
+    display: 'flex',
+    flexDirection: 'column',
+    color: 'var(--color-text-primary)',
+  };
 
-      <div style={{ width: '100%', flexGrow: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', padding: '0 10px' }}>
-        <nav style={{ width: '100%' }}>
-          <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+  const archivedListStyle = {
+    listStyle: 'none',
+    padding: 0,
+    margin: 0,
+    overflowY: 'auto',
+    flexGrow: 1,
+  };
+
+  const archivedItemStyle = {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: '8px 0',
+    borderBottom: '1px solid var(--color-border-light)',
+  };
+
+  const handleToggleArchivedPanel = async () => {
+    const newShowState = !showArchivedPanel;
+    setShowArchivedPanel(newShowState);
+    if (newShowState && user && user.id) {
+      setLoadingArchived(true);
+      try {
+        const allSessions = await fetchSessions(user.id, true); // Fetch all including archived
+        if (allSessions) {
+          setArchivedSessions(allSessions.filter(s => s.arquivado));
+        }
+      } catch (error) {
+        console.error("Erro ao buscar sessões arquivadas:", error);
+        alert("Falha ao carregar sessões arquivadas.");
+      } finally {
+        setLoadingArchived(false);
+      }
+    }
+  };
+
+  const handleUnarchiveAndSelect = async (sessionIdToUnarchive) => {
+    try {
+      await unarchiveSession(sessionIdToUnarchive);
+      // Optimistically remove from local archived list
+      setArchivedSessions(prev => prev.filter(s => s.id !== sessionIdToUnarchive));
+      // The main list will refresh via context/realtime.
+      // Optionally, set as active:
+      // setActiveSessionId(sessionIdToUnarchive); 
+      // setShowArchivedPanel(false); // Close panel after unarchiving
+    } catch (error) {
+      console.error("Falha ao desarquivar sessão:", error);
+      alert(`Erro ao desarquivar sessão: ${error.message}`);
+    }
+  };
+
+
+  return (
+    <>
+      <div style={sidebarStyle} className={`sidebar ${!isExpanded ? 'collapsed' : 'expanded'} ${theme}`}>
+        <div style={{ padding: '10px', display: 'flex', justifyContent: isExpanded ? 'flex-end' : 'center', alignItems: 'center', borderBottom: `1px solid var(--color-border)`, marginBottom: '10px' }}>
+          <button onClick={toggleSidebar} style={{...buttonStyle, padding: '5px'}} title={isExpanded ? "Recolher sidebar" : "Expandir sidebar"}>
+            {isExpanded ? <FiChevronsLeft size={22}/> : <FiChevronsRight size={22}/>}
+          </button>
+        </div>
+
+        <div style={{ width: '100%', flexGrow: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', padding: '0 10px' }}>
+          <nav style={{ width: '100%' }}>
+            <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
             {menuItems.map(item => (
               <li key={item.id} title={!isExpanded ? item.name : ''} style={navMenuItemStyle}>
                 <a href={`#${item.id}`} style={{ display: 'flex', alignItems: 'center', textDecoration: 'none', color: 'inherit', width: '100%' }}>
@@ -230,13 +389,57 @@ const Sidebar = ({ isCollapsed: propIsCollapsed, toggleSidebar: propToggleSideba
                       <li
                         key={session.id}
                         style={sessionListItemStyle(session.id === activeSessionId)}
-                        onClick={() => setActiveSessionId(session.id)}
-                        title={formatSessionDisplayName(session)}
+                        // onClick is now on the inner div for session selection
+                        title={editingSessionId === session.id ? "Editando nome..." : formatSessionDisplayName(session)}
                       >
-                        <FiList size={18} style={{ ...iconStyle, color: session.id === activeSessionId ? 'var(--color-accent)' : 'var(--color-text-secondary)' }} />
-                        <span style={textStyle}>
-                          {formatSessionDisplayName(session)}
-                        </span>
+                        {editingSessionId === session.id ? (
+                          <input
+                            type="text"
+                            value={editingSessionName}
+                            onChange={handleEditingInputChange}
+                            onKeyDown={handleEditingInputKeyDown}
+                            onBlur={handleSaveSessionName} // Save on blur
+                            style={sessionInputStyle}
+                            autoFocus
+                          />
+                        ) : (
+                          <div style={sessionContentStyle} onClick={() => setActiveSessionId(session.id)}>
+                            <FiList size={18} style={{ ...iconStyle, color: session.id === activeSessionId ? 'var(--color-accent)' : 'var(--color-text-secondary)' }} />
+                            <span style={{...textStyle, flexGrow: 1}}>
+                              {formatSessionDisplayName(session)}
+                            </span>
+                            {isExpanded && ( 
+                              <>
+                                <FiEdit2
+                                  size={16}
+                                  style={{...editIconStyle, marginRight: '8px'}}
+                                  onClick={(e) => {
+                                    e.stopPropagation(); 
+                                    handleStartEditSession(session);
+                                  }}
+                                  title="Renomear Sessão"
+                                />
+                                <FiArchive
+                                  size={16}
+                                  style={editIconStyle} // Can reuse style or make a new one
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    if (window.confirm(`Tem certeza que deseja arquivar a sessão "${formatSessionDisplayName(session)}"?`)) {
+                                      try {
+                                        await archiveSession(session.id);
+                                        console.log(`Sessão ${session.id} arquivada.`);
+                                      } catch (error) {
+                                        console.error("Falha ao arquivar sessão:", error);
+                                        alert(`Erro ao arquivar sessão: ${error.message}`);
+                                      }
+                                    }
+                                  }}
+                                  title="Arquivar Sessão"
+                                />
+                              </>
+                            )}
+                          </div>
+                        )}
                       </li>
                     ))}
                   </ul>
@@ -264,42 +467,70 @@ const Sidebar = ({ isCollapsed: propIsCollapsed, toggleSidebar: propToggleSideba
       </div>
 
       <div style={{ 
-        marginTop: 'auto', 
-        width: '100%', 
-        display: 'flex', 
-        flexDirection: 'column',
-        alignItems: 'center', 
+        marginTop: 'auto',
+        width: '100%',
         padding: '10px',
         borderTop: `1px solid var(--color-border)`,
+        boxSizing: 'border-box',
       }}>
         {user && (
-          <div 
-            style={{ 
-              ...baseItemStyle,
-              justifyContent: isExpanded ? 'flex-start' : 'center', 
-              marginBottom: '10px',
-              cursor: 'default',
-            }} 
-            title={user.email}
-          >
-            <FiUser size={22} style={iconStyle} />
-            {isExpanded && <span style={textStyle}>{displayName}</span>}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: isExpanded ? 'space-between' : 'center',
+            flexDirection: isExpanded ? 'row' : 'column',
+            width: '100%',
+            marginBottom: '10px',
+          }}>
+            <div 
+              style={{ 
+                display: 'flex',
+                alignItems: 'center',
+                cursor: 'default',
+                // For expanded, allow it to take space, for collapsed, center it
+                marginRight: isExpanded ? 'auto' : '0', 
+                padding: isExpanded ? '0' : '0 0 8px 0', // Add bottom padding in collapsed
+              }} 
+              title={fullDisplayName}
+            >
+              <FiUser size={22} style={{...iconStyle, marginRight: isExpanded ? '12px' : '0'}} />
+              {isExpanded && <span style={textStyle}>{displayName}</span>}
+            </div>
+            {isExpanded && ( // Logout button next to user name when expanded
+              <button
+                onClick={handleLogout}
+                style={{ ...buttonStyle, padding: '4px' }} // Smaller padding for icon button
+                title="Logout"
+              >
+                <FiLogOut size={20} />
+              </button>
+            )}
           </div>
         )}
 
+        {/* Collapsed Mode: Icons stacked below user */}
+        {!isExpanded && user && (
+          <button
+            onClick={handleLogout}
+            style={{ ...buttonStyle, width: '100%', marginBottom: '8px' }}
+            title="Logout"
+          >
+            <FiLogOut size={20} />
+          </button>
+        )}
+
+        {/* Theme and Archive Toggles */}
         <div style={{
           width: '100%',
           display: 'flex',
-          flexDirection: isExpanded ? 'row' : 'column',
-          justifyContent: isExpanded ? 'space-between' : 'center',
+          justifyContent: isExpanded ? 'flex-start' : 'center', // Align left when expanded
           alignItems: 'center',
+          gap: '10px', // Gap between theme and archive
+          flexDirection: isExpanded ? 'row' : 'column', // Stack when collapsed
         }}>
           <button
             onClick={toggleTheme}
-            style={{ 
-              ...buttonStyle, 
-              ...(isExpanded ? {} : { marginBottom: '8px' })
-            }}
+            style={{ ...buttonStyle, ...(isExpanded ? {} : {width: '100%', marginBottom: '8px'}) }}
             title={theme === 'light' ? "Mudar para Tema Escuro" : "Mudar para Tema Claro"}
           >
             {theme === 'light' ? <FiMoon size={20} /> : <FiSun size={20} />}
@@ -307,19 +538,47 @@ const Sidebar = ({ isCollapsed: propIsCollapsed, toggleSidebar: propToggleSideba
 
           {user && (
             <button
-              onClick={handleLogout}
-              style={{ 
-                ...buttonStyle,
-                ...(isExpanded ? { marginLeft: '10px' } : {}) 
-              }}
-              title="Logout"
+              onClick={handleToggleArchivedPanel}
+              style={{ ...buttonStyle, ...(isExpanded ? {} : {width: '100%'}) }}
+              title="Sessões Arquivadas"
             >
-              <FiLogOut size={20} />
+              <FiTrash2 size={20} />
             </button>
           )}
         </div>
       </div>
     </div>
+
+    {showArchivedPanel && user && (
+      <div style={archivedPanelStyle}>
+        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px'}}>
+          <h4 style={{margin:0, fontSize: '1.1rem'}}>Sessões Arquivadas</h4>
+          <button onClick={() => setShowArchivedPanel(false)} style={{...buttonStyle, fontSize:'1.2rem', padding:'4px'}} title="Fechar">
+            &times;
+          </button>
+        </div>
+        {loadingArchived && <p>Carregando arquivadas...</p>}
+        {!loadingArchived && archivedSessions.length === 0 && <p>Nenhuma sessão arquivada.</p>}
+        {!loadingArchived && archivedSessions.length > 0 && (
+          <ul style={archivedListStyle}>
+            {archivedSessions.map(session => (
+              <li key={session.id} style={archivedItemStyle}>
+                <span style={{...textStyle, flexGrow: 1, marginRight: '10px'}} title={formatSessionDisplayName(session)}>
+                  {formatSessionDisplayName(session)}
+                </span>
+                <FiUploadCloud
+                  size={18}
+                  style={{...editIconStyle, color: 'var(--color-accent)'}}
+                  onClick={() => handleUnarchiveAndSelect(session.id)}
+                  title="Restaurar Sessão"
+                />
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    )}
+    </>
   );
 };
 
